@@ -16,6 +16,8 @@ LogIn,
 UserPlus,
 LogOut,
 Sparkles,
+BarChart3,
+MessageSquare,
 } from "lucide-react";
 
 function Navbar() {
@@ -27,6 +29,11 @@ useLocation();
 const isLoggedIn = Boolean(
 localStorage.getItem("newsShieldToken")
 );
+let storedUser = null;
+try {
+  storedUser = JSON.parse(localStorage.getItem("newsShieldUser"));
+} catch (_) {}
+const isAdmin = storedUser?.role === "admin";
 
 // ==========================================
 // CLOSE MOBILE MENU
@@ -176,6 +183,16 @@ return ( <header className="sticky top-0 z-50 border-b border-slate-800/80 bg-sl
         )}
       </NavLink>
 
+      {isLoggedIn && <NavLink to="/feedback" className={navLinkClass}>
+        <MessageSquare size={17} />
+        <span>Feedback</span>
+      </NavLink>}
+
+      {isAdmin && <NavLink to="/admin/feedback" className={navLinkClass}>
+        <BarChart3 size={17} />
+        <span>Feedback</span>
+      </NavLink>}
+
     </div>
 
     {/* DESKTOP AUTH BUTTONS */}
@@ -280,6 +297,16 @@ return ( <header className="sticky top-0 z-50 border-b border-slate-800/80 bg-sl
           <History size={18} />
           History
         </NavLink>
+
+        {isLoggedIn && <NavLink to="/feedback" onClick={closeMobile} className={mobileNavLinkClass}>
+          <MessageSquare size={18} />
+          Feedback
+        </NavLink>}
+
+        {isAdmin && <NavLink to="/admin/feedback" onClick={closeMobile} className={mobileNavLinkClass}>
+          <BarChart3 size={18} />
+          Feedback
+        </NavLink>}
 
         <div className="my-3 h-px bg-slate-800" />
 

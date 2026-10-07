@@ -7,6 +7,8 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import History from "./pages/History";
+import AdminFeedback from "./pages/AdminFeedback";
+import Feedback from "./pages/Feedback";
 import NotFound from "./pages/NotFound";
 
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -52,6 +54,13 @@ return ( <BrowserRouter> <Navbar />
         </ProtectedRoute>
       }
     />
+
+    <Route
+      path="/admin/feedback"
+      element={<ProtectedRoute><AdminFeedback /></ProtectedRoute>}
+    />
+
+    <Route path="/feedback" element={<ProtectedRoute><Feedback /></ProtectedRoute>} />
 
     {/* 404 Route */}
 

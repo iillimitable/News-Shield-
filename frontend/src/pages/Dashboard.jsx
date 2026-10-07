@@ -198,6 +198,19 @@ try {
               data.verdict ||
               "Unverified",
 
+            mlPrediction:
+              data.mlPrediction ||
+              "Unverified",
+
+            mlConfidence:
+              data.mlConfidence !== undefined
+                ? Number(data.mlConfidence)
+                : 0,
+
+            webVerdict:
+              data.webVerdict ||
+              "Unverified",
+
             reason:
               data.reason ||
               "",
@@ -298,6 +311,11 @@ try {
       "Verification successfully saved to MongoDB:",
       historyData
     );
+
+    setResult((currentResult) => ({
+      ...currentResult,
+      verificationId: historyData.history?._id,
+    }));
 
     setSuccessMessage(
       "Verification completed and saved to MongoDB history."
@@ -609,6 +627,15 @@ return ( <main className="relative min-h-screen overflow-hidden bg-slate-950 px-
           verdict={
             result.verdict
           }
+          mlPrediction={
+            result.mlPrediction
+          }
+          mlConfidence={
+            result.mlConfidence
+          }
+          webVerdict={
+            result.webVerdict
+          }
 
           reason={
             result.reason
@@ -645,6 +672,7 @@ return ( <main className="relative min-h-screen overflow-hidden bg-slate-950 px-
           sources={
             result.sources || []
           }
+
         />
       </section>
     )}

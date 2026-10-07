@@ -10,12 +10,45 @@ require("dotenv").config();
 
 const User = require("./models/User");
 const Verification = require("./models/Verification");
+const Feedback = require("./models/Feedback");
 
 const app = express();
 
 const PORT = process.env.PORT || 5000;
 
 const GROQ_MODEL = "qwen/qwen3.8-27b";
+const JWT_SECRET = process.env.JWT_SECRET || "newsshield_secret_key_2026";
+
+const getUserRole = (user) => {
+  const adminEmail = (process.env.ADMIN_EMAIL || "").trim().toLowerCase();
+  return user.role === "admin" || (adminEmail && user.email === adminEmail)
+    ? "admin"
+    : "user";
+};
+
+const authenticate = (req, res, next) => {
+  const token = req.headers.authorization?.replace(/^Bearer\s+/i, "");
+  if (!token) return res.status(401).json({ error: "Authentication is required." });
+  try {
+    req.auth = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch (_) {
+    return res.status(401).json({ error: "Your session is invalid or has expired." });
+  }
+};
+
+const requireAdmin = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.auth.userId);
+    if (!user || getUserRole(user) !== "admin") {
+      return res.status(403).json({ error: "Administrator access is required." });
+    }
+    req.user = user;
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
 
 // ==========================================
 // MIDDLEWARE
@@ -132,8 +165,7 @@ app.post(
           userId:
             user._id.toString(),
         },
-        process.env.JWT_SECRET ||
-          "newsshield_secret_key_2026",
+        JWT_SECRET,
         {
           expiresIn: "7d",
         }
@@ -149,6 +181,7 @@ app.post(
           id: user._id.toString(),
           name: user.name,
           email: user.email,
+          role: getUserRole(user),
         },
       });
     } catch (error) {
@@ -221,8 +254,7 @@ app.post(
           userId:
             user._id.toString(),
         },
-        process.env.JWT_SECRET ||
-          "newsshield_secret_key_2026",
+        JWT_SECRET,
         {
           expiresIn: "7d",
         }
@@ -238,6 +270,7 @@ app.post(
           id: user._id.toString(),
           name: user.name,
           email: user.email,
+          role: getUserRole(user),
         },
       });
     } catch (error) {
@@ -633,7 +666,27 @@ app.post(
       );
 
       // ======================================
-      // STEP 1: TAVILY SEARCH
+      // STEP 1: ML PREDICTION
+      // ======================================
+      let mlPrediction = "Unverified";
+      let mlConfidence = 0;
+      
+      try {
+        const mlUrl = process.env.ML_SERVICE_URL || "http://127.0.0.1:5000/predict";
+        console.log("Calling ML Service at:", mlUrl);
+        const mlResponse = await axios.post(mlUrl, { text: claim }, { timeout: 10000 });
+        if (mlResponse.data) {
+          mlPrediction = mlResponse.data.prediction || "Unverified";
+          mlConfidence = mlResponse.data.confidence || 0;
+          console.log(`ML Prediction: ${mlPrediction}, Confidence: ${mlConfidence}%`);
+        }
+      } catch (mlError) {
+        console.error("ML Service failed or not reachable:", mlError.message);
+        // Do not fail the entire request if ML is down, just proceed with "Unverified"
+      }
+
+      // ======================================
+      // STEP 2: TAVILY SEARCH
       // ======================================
 
       let sources = [];
@@ -668,8 +721,11 @@ app.post(
         sources.length === 0
       ) {
         return res.json({
-          verdict:
-            "Unverified",
+          claim: claim,
+          mlPrediction,
+          mlConfidence,
+          webVerdict: "Unverified",
+          verdict: "Unverified",
 
           reason:
             "No reliable web sources were found to verify this claim.",
@@ -687,14 +743,14 @@ app.post(
           contradictingPercentage: 0,
 
           analysisEngine:
-            "Tavily Web Search",
+            "Tavily Web Search + ML Classifier",
 
           sources: [],
         });
       }
 
       // ======================================
-      // STEP 2: GROQ VERIFICATION
+      // STEP 3: GROQ VERIFICATION
       // ======================================
 
       let result;
@@ -794,6 +850,10 @@ app.post(
 
       const verificationResponse =
         {
+          claim: claim,
+          mlPrediction,
+          mlConfidence,
+          webVerdict: result.verdict || "Unverified",
           verdict:
             result.verdict ||
             "Unverified",
@@ -817,7 +877,7 @@ app.post(
             contradicting,
 
           analysisEngine:
-            "Tavily Web Search + Gemini LLM",
+            "Hybrid: NLP ML Classifier + Web Search + Gemini LLM",
 
           sources,
         };
@@ -865,6 +925,9 @@ app.post(
         userId,
         title,
         verdict,
+        mlPrediction,
+        mlConfidence,
+        webVerdict,
         reason,
         confidence,
         evidenceScore,
@@ -985,6 +1048,19 @@ app.post(
 
             verdict:
               verdict ||
+              "Unverified",
+
+            mlPrediction:
+              mlPrediction ||
+              "Unverified",
+
+            mlConfidence:
+              Number(
+                mlConfidence
+              ) || 0,
+
+            webVerdict:
+              webVerdict ||
               "Unverified",
 
             reason:
@@ -1197,6 +1273,99 @@ app.delete(
     }
   }
 );
+
+// ==========================================
+// FEEDBACK
+// ==========================================
+
+app.post("/api/feedback", authenticate, async (req, res) => {
+  try {
+    const { verificationId, verificationResult, helpful, rating, category, comment } = req.body;
+    const categories = [
+      "Correct result", "Incorrect result", "Unclear explanation",
+      "Insufficient evidence", "Irrelevant sources", "Other",
+    ];
+    const verdicts = ["Real", "Fake", "Unverified"];
+
+    if (verificationId && !mongoose.Types.ObjectId.isValid(verificationId)) {
+      return res.status(400).json({ error: "A valid verification ID is required." });
+    }
+    if (verificationResult && !verdicts.includes(verificationResult)) {
+      return res.status(400).json({ error: "Verification result must be Real, Fake, or Unverified." });
+    }
+    if (typeof helpful !== "boolean") {
+      return res.status(400).json({ error: "Please indicate whether this result was helpful." });
+    }
+    if (!Number.isInteger(Number(rating)) || Number(rating) < 1 || Number(rating) > 5) {
+      return res.status(400).json({ error: "Rating must be between 1 and 5." });
+    }
+    if (!categories.includes(category)) {
+      return res.status(400).json({ error: "Please select a valid feedback type." });
+    }
+
+    let verification = null;
+    if (verificationId) {
+      verification = await Verification.findOne({ _id: verificationId, userId: req.auth.userId });
+      if (!verification) return res.status(404).json({ error: "Verification record not found." });
+    }
+
+    const feedback = await Feedback.create({
+      userId: req.auth.userId,
+      verificationId,
+      verificationResult: verification?.verdict || verificationResult || "Unverified",
+      helpful,
+      rating: Number(rating),
+      category,
+      comment: typeof comment === "string" ? comment.trim() : "",
+    });
+
+    res.status(201).json({
+      message: "Thank you! Your feedback helps us improve NewsShield.",
+      feedback,
+    });
+  } catch (error) {
+    console.error("Feedback save error:", error.message);
+    res.status(500).json({ error: "Failed to save feedback." });
+  }
+});
+
+// ==========================================
+// ADMIN FEEDBACK MANAGEMENT
+// ==========================================
+
+app.get("/api/admin/feedback", authenticate, requireAdmin, async (req, res) => {
+  try {
+    const feedback = await Feedback.find()
+      .populate("userId", "name email")
+      .populate("verificationId", "title verdict")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const total = feedback.length;
+    const averageRating = total
+      ? Number((feedback.reduce((sum, item) => sum + item.rating, 0) / total).toFixed(1))
+      : 0;
+    const helpfulCount = feedback.filter((item) => item.helpful).length;
+    const categories = feedback.reduce((counts, item) => {
+      counts[item.category] = (counts[item.category] || 0) + 1;
+      return counts;
+    }, {});
+
+    res.json({
+      feedback,
+      statistics: {
+        total,
+        averageRating,
+        helpfulCount,
+        helpfulPercentage: total ? Math.round((helpfulCount / total) * 100) : 0,
+        categories,
+      },
+    });
+  } catch (error) {
+    console.error("Admin feedback fetch error:", error.message);
+    res.status(500).json({ error: "Failed to fetch feedback." });
+  }
+});
 
 // ==========================================
 // 404 HANDLER

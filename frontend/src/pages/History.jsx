@@ -542,10 +542,16 @@ return ( <main className="relative min-h-screen overflow-hidden bg-slate-950 px-
                       {verdictData.label}
                     </span>
 
+                    {item.mlPrediction && item.mlPrediction !== "Unverified" && (
+                      <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-400">
+                        ML Pred: <span className="font-bold">{item.mlPrediction}</span> ({item.mlConfidence}%)
+                      </span>
+                    )}
+
                     {item.confidence !==
                       undefined && (
                       <span className="rounded-full border border-slate-800 bg-slate-950 px-3 py-1.5 text-xs font-medium text-slate-400">
-                        Confidence{" "}
+                        Web Conf{" "}
                         <span className="font-bold text-slate-300">
                           {formatPercentage(
                             item.confidence

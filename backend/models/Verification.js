@@ -20,6 +20,23 @@ verdict: {
   default: "Unverified",
 },
 
+mlPrediction: {
+  type: String,
+  enum: ["Real", "Fake", "Unverified"],
+  default: "Unverified",
+},
+
+mlConfidence: {
+  type: Number,
+  default: 0,
+},
+
+webVerdict: {
+  type: String,
+  enum: ["Real", "Fake", "Unverified"],
+  default: "Unverified",
+},
+
 reason: {
   type: String,
   default: "",

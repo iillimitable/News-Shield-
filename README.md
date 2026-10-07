@@ -1,21 +1,20 @@
-# NewsShield
+# NewsShield (Hybrid Verification System)
 
-NewsShield is a full-stack news-claim verification application. A user submits a headline or claim, the backend gathers recent web evidence with Tavily, and Groq AI produces an evidence-based assessment with a verdict, confidence score, explanation, and source links.
+NewsShield is a full-stack, hybrid news-claim verification application. It combines traditional Machine Learning (NLP + Logistic Regression) with real-time web search (Tavily) and Generative AI (Groq) to classify a news claim as `Real`, `Fake`, or `Unverified`.
 
-> **Important:** NewsShield is an assistive verification tool, not an absolute source of truth. AI results can be wrong when evidence is incomplete, outdated, satirical, misleading, or contradictory. Always open and evaluate the referenced sources yourself.
+> **Important:** NewsShield is an assistive verification tool, not an absolute source of truth. AI results and ML predictions can be wrong when evidence is incomplete, outdated, or contradictory. Always evaluate the referenced sources yourself.
 
-## Features
+## Project Overview
 
-- Search recent news evidence for a claim
-- AI-assisted classification as `Real`, `Fake`, or `Unverified`
-- Confidence, supporting, and contradicting scores
-- Linked source results for further reading
-- User registration and login with hashed passwords
-- Protected dashboard and verification-history pages
-- Expandable history records and delete controls
-- Responsive React interface with mobile navigation
+In the era of rapid information spread, fake news has become a significant societal issue. NewsShield attempts to combat this by evaluating a single claim using two distinct approaches:
+1. **Machine Learning Analysis:** Uses a trained Natural Language Processing (NLP) model to recognize linguistic patterns common in fake or real news.
+2. **Web Evidence Analysis:** Fetches real-time context from the web and uses a large language model to reason about the truthfulness of the claim based purely on recent evidence.
 
-## How it works
+## Problem Statement
+
+Fake news detection relies heavily on context. Static machine learning models (like Logistic Regression trained on past datasets) struggle with novel, breaking news because they lack recent context. Conversely, pure web-search approaches can be easily confused by heavily biased but widely shared articles. NewsShield addresses this problem by combining **Pattern Recognition** (ML) and **Fact Retrieval** (Web + LLM) into a single hybrid pipeline.
+
+## How NewsShield Works
 
 ```text
 User claim
@@ -23,165 +22,204 @@ User claim
 	v
 Express API (/api/verify)
 	|
-	+--> Tavily news search
+	+--> 1. ML Service (/predict via Python Flask)
 	|       |
-	|       +--> Recent source titles, URLs, content, and relevance scores
+	|       +--> NLP Preprocessing -> TF-IDF Vectorization -> Logistic Regression
+	|       +--> Returns ML Prediction (Real/Fake) & Confidence
 	|
-	+--> Groq AI analysis of the retrieved evidence
+	+--> 2. Tavily News Search
+	|       |
+	|       +--> Retrieves recent source titles, URLs, content, and relevance scores
+	|
+	+--> 3. Groq AI Analysis
 			|
-			+--> Verdict, reason, confidence, and evidence scores
+			+--> Analyzes the retrieved web evidence against the claim
+			+--> Returns Web Verdict, Reason, and Evidence Scores
 					|
-					+--> React result card
-					+--> MongoDB verification history for signed-in users
+					+--> React Dashboard combines and displays both ML and Web results
+					+--> MongoDB stores verification history for signed-in users
 ```
 
-## Technology
+## NLP Pipeline
+
+The NLP pipeline is responsible for cleaning and preparing raw text data for the machine learning model.
+The steps include:
+- **Lowercase conversion:** Ensuring all text is uniform.
+- **Noise Removal:** Removing URLs, special characters, and punctuation.
+- **Tokenization:** Splitting sentences into individual words.
+- **Stop-word removal:** Filtering out common words (like "the", "is", "in") that don't add significant meaning.
+- **Lemmatization:** Reducing words to their base or dictionary form (e.g., "running" becomes "run").
+
+## TF-IDF
+
+**Term Frequency-Inverse Document Frequency (TF-IDF)** is a statistical measure used to evaluate how important a word is to a document in a collection or corpus.
+- **Term Frequency (TF):** How frequently a word appears in a document.
+- **Inverse Document Frequency (IDF):** Reduces the weight of words that occur very frequently in the dataset and increases the weight of rare words.
+This technique converts text into numerical vectors that our machine learning model can understand.
+
+## Logistic Regression
+
+Logistic Regression is a fundamental classification algorithm in machine learning. Despite the name, it is used for classification, not regression. It calculates the probability that a given input belongs to a certain class (e.g., Real or Fake). We use it because it is computationally efficient, interpretable, and performs surprisingly well on binary text classification tasks like fake news detection.
+
+## ML Prediction
+
+The ML prediction is the output of our Logistic Regression model. It provides a classification label (`Real` or `Fake`) and a confidence score based on the probability calculated by the model. This prediction relies *entirely* on patterns learned from the training dataset, without knowing current real-world facts.
+
+## Tavily Evidence Retrieval
+
+To bridge the gap in the ML model's knowledge, NewsShield queries the Tavily Search API. Tavily fetches live, contextually relevant articles, news snippets, and sources directly related to the user's claim.
+
+## Groq AI Analysis
+
+The evidence retrieved by Tavily is sent to Groq AI (using a large language model). The LLM acts as a reasoning engine. It reads the user's claim, reads the collected web evidence, and logically deduces whether the web evidence supports or contradicts the claim.
+
+## Hybrid Verification Architecture
+
+By separating the ML prediction from the Web Evidence verification, NewsShield explicitly highlights conflicts. If the ML model says a claim sounds "Real" (because it uses standard journalistic language), but Groq says it's "Fake" (because the web evidence contradicts it), both results are displayed to the user. The Groq explanation helps clarify *why* the web evidence leads to a specific conclusion.
+
+## Technology Stack
 
 | Area | Technology |
 | --- | --- |
-| Frontend | React 19, Vite, React Router, Tailwind CSS, Lucide React |
-| Backend | Node.js, Express 5, Axios |
-| Database | MongoDB with Mongoose |
-| Authentication | JWT and bcryptjs |
-| News search | Tavily Search API |
-| AI analysis | Groq Chat Completions API |
+| Frontend | React 19, Vite, Tailwind CSS, Lucide React |
+| Backend | Node.js, Express 5, Axios, Mongoose |
+| Machine Learning | Python 3, Flask, scikit-learn, pandas, NLTK, joblib |
+| Database | MongoDB |
+| External APIs | Tavily Search API, Groq Chat Completions API |
 
-## Repository structure
+## Project Structure
 
 ```text
 NewsShield-final/
-├── backend/
+├── ml-service/              # NEW: Python Machine Learning Service
+│   ├── data/                # Place your fake news dataset CSV here
+│   ├── models/              # Saved model (.pkl) files
+│   ├── app.py               # Flask API
+│   ├── preprocess.py        # NLP Preprocessing logic
+│   ├── train_model.py       # Training pipeline
+│   └── requirements.txt     # Python dependencies
+├── backend/                 # Node.js + Express API
 │   ├── models/
 │   │   ├── User.js
-│   │   └── Verification.js
-│   ├── server.js
+│   │   └── Verification.js  # Updated with ML fields
+│   ├── server.js            # Updated to call ML Service
 │   ├── package.json
-│   └── .env                 # Local only, never commit
-├── frontend/
+│   └── .env                 
+├── frontend/                # React Frontend
 │   ├── src/
 │   │   ├── components/
+│   │   │   └── ResultCard.jsx # Updated with ML UI
 │   │   ├── pages/
-│   │   ├── App.jsx
-│   │   └── main.jsx
+│   │   │   ├── Dashboard.jsx
+│   │   │   ├── History.jsx
+│   │   │   └── ...
 │   ├── package.json
 │   └── vite.config.js
-├── .gitignore
 └── README.md
 ```
 
-## Requirements
-
-- Node.js 18 or later
-- npm
-- MongoDB running locally or a MongoDB connection string
-- A Tavily API key
-- A Groq API key
-
 ## Installation
 
-Clone the repository and install each application independently:
+Clone the repository and install dependencies for all three parts of the application.
 
+### 1. ML Service (Python)
+Ensure Python 3.8+ is installed.
 ```bash
-git clone https://github.com/iillimitable/News-Shield-.git
-cd News-Shield-
+cd ml-service
+pip install -r requirements.txt
+```
 
+### 2. Backend (Node.js)
+```bash
 cd backend
-npm install
-
-cd ../frontend
 npm install
 ```
 
-## Environment configuration
+### 3. Frontend (React)
+```bash
+cd frontend
+npm install
+```
 
-Create a file named `backend/.env` with your own values:
+## Dataset
 
+To train the model, you need a labeled fake news dataset. 
+Place a CSV file inside `ml-service/data/` (e.g., `dataset.csv`).
+The CSV must contain at least two columns:
+- `text`: The news content or headline.
+- `label`: The classification (`Real` or `Fake`, or `1`/`0`).
+
+*If no dataset is found, `train_model.py` will automatically generate a tiny dummy dataset to ensure the pipeline runs, but a real dataset is required for accurate predictions.*
+
+## Model Training
+
+Before running the ML service, you must train the model and save the vectorizer and classifier:
+```bash
+cd ml-service
+python train_model.py
+```
+This script will output an evaluation report (Accuracy, Precision, Recall, F1 Score, Confusion Matrix) and save the `.pkl` files in `ml-service/models/`.
+
+## Running the ML Service
+
+Open a terminal and start the Flask API:
+```bash
+cd ml-service
+python app.py
+```
+The service runs at `http://localhost:5000`.
+
+## Running Backend
+
+Configure `backend/.env`:
 ```env
 PORT=5001
 MONGO_URI=mongodb://localhost:27017/newsshield
-JWT_SECRET=replace_with_a_long_random_secret
-TAVILY_API_KEY=your_tavily_api_key
-GROQ_API_KEY=your_groq_api_key
+JWT_SECRET=your_secret
+TAVILY_API_KEY=your_tavily_key
+GROQ_API_KEY=your_groq_key
+ML_SERVICE_URL=http://localhost:5000/predict
 ```
 
-The frontend currently calls the backend at `http://localhost:5001`, so keep `PORT=5001` for the default local setup. Never commit `.env`, API keys, database credentials, or generated dependency folders.
-
-## Run the application
-
-Start MongoDB first, then open two terminals.
-
-**Terminal 1: backend**
-
+Open a second terminal:
 ```bash
 cd backend
 node server.js
 ```
+The Node API runs at `http://localhost:5001`.
 
-The API runs at `http://localhost:5001`.
+## Running Frontend
 
-**Terminal 2: frontend**
-
+Open a third terminal:
 ```bash
 cd frontend
 npm run dev
 ```
+Open `http://localhost:5173` in your browser.
 
-Open the Vite URL shown in the terminal, normally `http://localhost:5173`.
+## API Endpoints
 
-## Available frontend routes
-
-| Route | Purpose | Access |
-| --- | --- | --- |
-| `/` | Landing page and product overview | Public |
-| `/login` | Sign in | Public |
-| `/register` | Create an account | Public |
-| `/dashboard` | Submit and verify a news claim | Signed in |
-| `/history` | Review or delete saved verifications | Signed in |
-
-## API endpoints
-
+### ML Service (Python)
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
-| `GET` | `/` | Backend health response |
-| `POST` | `/api/auth/register` | Create a user account |
-| `POST` | `/api/auth/login` | Authenticate a user |
-| `POST` | `/api/search` | Search Tavily for news sources |
-| `POST` | `/api/verify` | Search sources and request an AI assessment |
-| `POST` | `/api/history` | Save a verification record |
-| `GET` | `/api/history/:userId` | Load a user's verification history |
-| `DELETE` | `/api/history/:id` | Delete a verification record |
+| `GET` | `/` | Health check |
+| `POST` | `/predict` | Returns ML prediction and confidence for given text |
 
-## Useful scripts
+### Backend (Node.js)
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/verify` | Calls ML service, Tavily, and Groq; combines results |
+| `POST` | `/api/history` | Saves hybrid verification record |
+| `GET` | `/api/history/:userId` | Retrieves user history |
 
-From `frontend/`:
+## Limitations
 
-```bash
-npm run dev       # Start the Vite development server
-npm run build     # Create a production build
-npm run preview   # Preview the production build locally
-npm run lint      # Run Oxlint
-```
+1. **Static ML Model:** The Logistic Regression model only knows patterns from its training data. It cannot verify recent events (e.g., a news event from today) unless the LLM + Web Search catches it.
+2. **Web Search Dependency:** If Tavily cannot find relevant sources, the web verdict defaults to `Unverified`.
+3. **LLM Hallucination:** While Groq is constrained by the provided web evidence, LLMs can occasionally misinterpret complex nuances in text.
 
-From `backend/`:
+## Future Scope
 
-```bash
-node server.js    # Start the Express API
-npm test          # Placeholder script; automated tests are not configured yet
-```
-
-## Security and production notes
-
-This repository is configured for local development. Before deploying it publicly, address the following:
-
-- Require `JWT_SECRET` instead of relying on a fallback secret.
-- Enforce JWT authentication and record ownership in backend history routes; frontend route protection alone is not sufficient.
-- Add rate limiting and request-size limits around paid Tavily and Groq operations.
-- Validate AI output strictly and fall back to `Unverified` for invalid verdicts or scores.
-- Treat retrieved article text as untrusted input and defend against prompt injection.
-- Move the frontend API URL into environment configuration instead of hardcoding localhost.
-- Use secure, production-appropriate token storage and HTTPS.
-- Rotate any API key that has been exposed and remove secrets from Git history if necessary.
-
-## License
-
-No license has been specified for this project yet. Add a license file before distributing or reusing the code publicly.
+- Implement deep learning architectures (like LSTM or BERT) for the ML classification pipeline.
+- Implement automated model retraining using a pipeline (e.g., Apache Airflow) to feed newly verified fake news into the training dataset.
+- Add multi-language support by upgrading the NLP preprocessing pipeline to handle non-English text.
