@@ -1,95 +1,123 @@
+
 const mongoose = require("mongoose");
 
 const verificationSchema = new mongoose.Schema(
-{
-userId: {
-type: mongoose.Schema.Types.ObjectId,
-ref: "User",
-required: true,
-},
+  {
+    // User who verified the news
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
 
-title: {
-  type: String,
-  required: true,
-  trim: true,
-},
+    // Original news claim
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+    },
 
-verdict: {
-  type: String,
-  enum: ["Real", "Fake", "Unverified"],
-  default: "Unverified",
-},
+    // Final AI + evidence verdict
+    verdict: {
+      type: String,
+      enum: ["Real", "Fake", "Unverified"],
+      default: "Unverified",
+    },
 
-mlPrediction: {
-  type: String,
-  enum: ["Real", "Fake", "Unverified"],
-  default: "Unverified",
-},
+    // Supporting ML prediction
+    mlPrediction: {
+      type: String,
+      enum: ["Real", "Fake", "Unverified"],
+      default: "Unverified",
+    },
 
-mlConfidence: {
-  type: Number,
-  default: 0,
-},
+    mlConfidence: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
 
-webVerdict: {
-  type: String,
-  enum: ["Real", "Fake", "Unverified"],
-  default: "Unverified",
-},
+    // Verdict based on web evidence analysis
+    webVerdict: {
+      type: String,
+      enum: ["Real", "Fake", "Unverified"],
+      default: "Unverified",
+    },
 
-reason: {
-  type: String,
-  default: "",
-},
+    // Explanation of the verification result
+    reason: {
+      type: String,
+      default: "",
+      trim: true,
+    },
 
-confidence: {
-  type: Number,
-  default: 0,
-},
+    confidence: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
 
-evidenceScore: {
-  type: Number,
-  default: 0,
-},
+    // Evidence scores
+    evidenceScore: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 1,
+    },
 
-supportingScore: {
-  type: Number,
-  default: 0,
-},
+    supportingScore: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 1,
+    },
 
-contradictingScore: {
-  type: Number,
-  default: 0,
-},
+    contradictingScore: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 1,
+    },
 
-supportingPercentage: {
-  type: Number,
-  default: 0,
-},
+    supportingPercentage: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
 
-contradictingPercentage: {
-  type: Number,
-  default: 0,
-},
+    contradictingPercentage: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
 
-analysisEngine: {
-  type: String,
-  default: "Tavily Web Search + Gemini AI",
-},
+    // Verification technology used
+    analysisEngine: {
+      type: String,
+      default: "Tavily Web Search + Groq AI",
+    },
 
-sources: {
-  type: Array,
-  default: [],
-},
-
-
-},
-{
-timestamps: true,
-}
+    // Web evidence sources
+    sources: {
+      type: [
+        {
+          title: { type: String, default: "" },
+          url: { type: String, default: "" },
+        },
+      ],
+      default: [],
+    },
+  },
+  {
+    timestamps: true,
+  }
 );
 
 module.exports = mongoose.model(
-"Verification",
-verificationSchema
+  "Verification",
+  verificationSchema
 );
